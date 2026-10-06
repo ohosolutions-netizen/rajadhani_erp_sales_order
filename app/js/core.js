@@ -125,3 +125,35 @@ export function decodeResponse(response) {
   }
   return body;
 }
+
+// Keep the ERP tax ID and its jurisdiction together; labels alone do not change tax.
+export function normalizeTax(t) {
+  const name = t.tax_name || t.tax_group_name || t.name || t.tax_name_formatted || t.text || '';
+  const specific = String(t.tax_specific_type || '').toLowerCase();
+  const specification = String(t.tax_specification || t.specification || '').toLowerCase();
+  const kind = specification === 'inter' || specific === 'igst' || /igst/i.test(name) ? 'inter'
+    : specification === 'intra' || /^(cgst|sgst|utgst)$/.test(specific) || /gst/i.test(name) ? 'intra' : '';
+  return {id:String(t.tax_id || t.tax_group_id || t.id || ''),name,
+    percentage:Number(t.tax_percentage ?? t.tax_group_percentage ?? t.percentage ?? 0),specification:kind};
+}
+export function selectTransactionTax(item, taxes, specification) {
+  if (!specification) return null;
+  const preferences = item.item_tax_preferences || [];
+  const candidates = preferences.map(p => {
+    const known = taxes.find(t => String(t.id) === String(p.tax_id || p.tax_group_id));
+    return normalizeTax({...known,...p});
+  });
+  const preferred = candidates.find(t => t.specification === specification && t.id && t.name && Number.isFinite(t.percentage));
+  if (preferred) return preferred;
+  const base = taxes.find(t => String(t.id) === String(item.tax_id)) || normalizeTax(item);
+  if (base.id && base.specification === specification) return base;
+  // Match only a unique tax of the same rate and correct jurisdiction.
+  const rate = candidates.find(t => Number.isFinite(t.percentage) && t.name)?.percentage ?? base.percentage;
+  const matches = taxes.filter(t => t.specification === specification && t.percentage === rate);
+  return matches.length === 1 ? matches[0] : null;
+}
+export function transactionTaxSpecification(sellerState, placeOfSupply) {
+  const seller = String(sellerState || '').trim().toUpperCase();
+  const supply = String(placeOfSupply || '').trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(seller) && /^[A-Z]{2}$/.test(supply) ? seller === supply ? 'intra' : 'inter' : '';
+}

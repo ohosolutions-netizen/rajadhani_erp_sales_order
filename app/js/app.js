@@ -1,11 +1,11 @@
 import { ERP } from './erp.js';
-import { calculate, validateSalesOrder, makePayload, pieceQuantity, itemPacking } from './core.js';
+import { calculate, validateSalesOrder, makePayload, pieceQuantity, itemPacking, normalizeTax, selectTransactionTax, transactionTaxSpecification } from './core.js';
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const config = await fetch(new URL('../config.json', import.meta.url)).then(r => { if (!r.ok) throw new Error('Cannot load widget configuration'); return r.json(); });
 if (window.RAJADHANI_PREVIEW_CONFIG) Object.assign(config, window.RAJADHANI_PREVIEW_CONFIG);
 const api = new ERP(config, window.ZFAPPS);
-const state = { customer: null, lines: [], taxes: [], currency: 'INR', busy: false, saved: false, allowClose: false, uncertain: false, customerVersion: 0, pendingOperations: 0, pendingSO: { item: null, rows: [], loading: false, error: '' } };
+const state = { customer: null, lines: [], taxes: [], locations: [], currency: 'INR', busy: false, saved: false, allowClose: false, uncertain: false, customerVersion: 0, pendingOperations: 0, pendingSO: { item: null, rows: [], loading: false, error: '' } };
 let approvedPayload = null;
 function pending(delta) { state.pendingOperations += delta; $('saveButton').disabled = state.pendingOperations > 0 || state.saved || state.uncertain; }
 const money = n => new Intl.NumberFormat('en-IN', { style: 'currency', currency: state.currency }).format(Number.isFinite(n) ? n : 0);
@@ -62,9 +62,10 @@ function getValues() {
 function totals() {
   const v = getValues(); const t = calculate(state.lines, v.discount, v.discountType, v.rounded);
   for (const [id, key] of Object.entries({subtotal:'subtotal',discountAmount:'discount',taxTotal:'tax',roundValue:'adjustment',grandTotal:'total'})) $(id).textContent = `${id === 'discountAmount' ? '− ' : ''}${money(t[key])}`;
-  const intraState = v.place_of_supply === 'KL';
+  const specification = taxSpecification();
+  const intraState = specification === 'intra';
   const halfTax = Math.round((t.tax / 2 + Number.EPSILON) * 100) / 100;
-  $('taxBreakdown').innerHTML = intraState
+  $('taxBreakdown').innerHTML = !specification ? '' : intraState
     ? `<div class="summaryrow"><span>CGST</span><span>${esc(money(halfTax))}</span></div><div class="summaryrow"><span>SGST</span><span>${esc(money(t.tax - halfTax))}</span></div>`
     : `<div class="summaryrow"><span>IGST</span><span>${esc(money(t.tax))}</span></div>`;
   $('totalDetail').textContent = `${state.lines.length} item${state.lines.length === 1 ? '' : 's'} in this sales order`;
@@ -143,7 +144,7 @@ function focusSalesOrderItems(focusIndex = null) {
 }
 function renderLines(focusIndex = null, focusItems = false) {
   $('emptyItems').hidden = !!state.lines.length;
-  $('lineItems').innerHTML = state.lines.map((l,i) => l.notFound ? `<tr data-line="${i}" class="notfoundline"><td>${i+1}</td><td colspan="8"><strong>Item not found</strong><small>Scanned value: ${esc(l.scanText || l.sku || '')}. Check the barcode/item code in ERP.</small></td><td><button class="remove" type="button" data-remove="${i}" aria-label="Remove item not found warning">×</button></td></tr>` : `<tr data-line="${i}" class="${l.loading ? 'loadingline' : ''}"><td>${i+1}</td><td class="itemname"><strong>${esc(l.name)}</strong><small>${esc(l.sku || 'No SKU')} · HSN ${esc(l.hsn_or_sac || '—')}</small>${l.loading ? '<small class="loadingnote">Loading ERP item details…</small>' : ''}${l.packingError ? `<small class="packingerror">${esc(l.packingError)}</small>${l.itemDebug ? `<button class="debugcopy" type="button" data-debug="${i}">Copy item response</button>` : ''}` : ''}</td><td>${esc(l.stock ?? '—')}<small>${esc(l.mu || l.unit || 'units')}</small></td><td>${l.loading ? '…' : esc(l.pieces || '—')}</td><td><input type="number" min="0.001" step="any" value="${l.quantity}" data-row="${i}" data-field="quantity" aria-label="Quantity for ${esc(l.name)}" required></td><td data-piece="${i}">${l.loading ? '…' : l.pieces ? l.pieces*l.quantity : '—'}</td><td><input type="number" min="0" step="0.01" value="${l.rate}" data-row="${i}" data-field="rate" aria-label="Rate for ${esc(l.name)}" required></td><td><select data-row="${i}" data-field="tax" aria-label="Tax for ${esc(l.name)}"><option value="">${l.loading ? 'Loading…' : l.tax_exemption_id ? 'ERP exempt' : 'Select tax'}</option>${state.taxes.map(t=>`<option value="${esc(t.id)}" ${String(l.tax?.id)===String(t.id)?'selected':''}>${esc(t.name)} (${t.percentage}%)</option>`).join('')}</select></td><td class="right" data-amount="${i}">${l.loading ? '…' : esc(money(pieceQuantity(l)*l.rate))}</td><td><button class="remove" type="button" data-remove="${i}" aria-label="Remove ${esc(l.name)}">×</button></td></tr>`).join('');
+  $('lineItems').innerHTML = state.lines.map((l,i) => l.notFound ? `<tr data-line="${i}" class="notfoundline"><td>${i+1}</td><td colspan="8"><strong>Item not found</strong><small>Scanned value: ${esc(l.scanText || l.sku || '')}. Check the barcode/item code in ERP.</small></td><td><button class="remove" type="button" data-remove="${i}" aria-label="Remove item not found warning">×</button></td></tr>` : `<tr data-line="${i}" class="${l.loading ? 'loadingline' : ''}"><td>${i+1}</td><td class="itemname"><strong>${esc(l.name)}</strong><small>${esc(l.sku || 'No SKU')} · HSN ${esc(l.hsn_or_sac || '—')}</small>${l.loading ? '<small class="loadingnote">Loading ERP item details…</small>' : ''}${l.packingError ? `<small class="packingerror">${esc(l.packingError)}</small>${l.itemDebug ? `<button class="debugcopy" type="button" data-debug="${i}">Copy item response</button>` : ''}` : ''}</td><td>${esc(l.stock ?? '—')}<small>${esc(l.mu || l.unit || 'units')}</small></td><td>${l.loading ? '…' : esc(l.pieces || '—')}</td><td><input type="number" min="0.001" step="any" value="${l.quantity}" data-row="${i}" data-field="quantity" aria-label="Quantity for ${esc(l.name)}" required></td><td data-piece="${i}">${l.loading ? '…' : l.pieces ? l.pieces*l.quantity : '—'}</td><td><input type="number" min="0" step="0.01" value="${l.rate}" data-row="${i}" data-field="rate" aria-label="Rate for ${esc(l.name)}" required></td><td><select data-row="${i}" data-field="tax" aria-label="Tax for ${esc(l.name)}"><option value="">${l.loading ? 'Loading…' : l.tax_exemption_id ? 'ERP exempt' : 'Select tax'}</option>${state.taxes.filter(t=>t.specification === taxSpecification()).map(t=>`<option value="${esc(t.id)}" ${String(l.tax?.id)===String(t.id)?'selected':''}>${esc(t.name)} (${t.percentage}%)</option>`).join('')}</select></td><td class="right" data-amount="${i}">${l.loading ? '…' : esc(money(pieceQuantity(l)*l.rate))}</td><td><button class="remove" type="button" data-remove="${i}" aria-label="Remove ${esc(l.name)}">×</button></td></tr>`).join('');
   totals();
   if (!state.lines.length) loadPendingSO(null);
   if (focusIndex != null || focusItems) focusSalesOrderItems(focusIndex);
@@ -186,11 +187,11 @@ async function chooseCustomer(record) {
     state.customer=c;state.currency=c.currency_code || api.organization?.currency_code || 'INR';$('currencyLabel').textContent=state.currency;
     $('customerSearch').value=c.contact_name; $('customerHint').textContent=[c.company_name,c.email].filter(Boolean).join(' · ') || 'Customer loaded from ERP';
     $('gstNumber').value=c.gst_no || ''; $('shippingGst').value=c.shipping_gst_no || '';
-    $('placeOfSupply').value=c.place_of_contact || c.place_of_supply || '';
+    $('placeOfSupply').value=c.place_of_supply || c.place_of_contact || '';
     $('cf_mobile').value=c.mobile || c.contact_persons?.find(p=>p.is_primary_contact)?.mobile || c.phone || '';
     $('cf_shippingPhone').value=c.shipping_address?.phone || '';
     for(const [k,m] of Object.entries(config.customFields)) { const source=(c.custom_fields||[]).find(f=>m.customerApiName && f.api_name===m.customerApiName); if(source && $(`cf_${k}`))$(`cf_${k}`).value=source.value ?? ''; }
-    addresses();totals();
+    addresses();updateTransactionTaxes();
     const orders=await api.all('/salesorders','salesorders',{customer_id:c.contact_id}); if(version!==state.customerVersion)return;
     selectOptions('salesOrder',orders.filter(o=>['open','confirmed','partially_invoiced'].includes(o.status)),'salesorder_id','salesorder_number','No sales order');$('salesOrder').disabled=false;
     requestAnimationFrame(() => $('itemSearch').focus());
@@ -228,24 +229,30 @@ function searchable(inputId, resultsId, search, key, describe, choose, options =
 }
 searchable('customerSearch','customerResults',(q,p)=>api.searchCustomers(q,p),'contacts',c=>[c.contact_name,[c.company_name,c.mobile || c.email].filter(Boolean).join(' · ')],chooseCustomer);
 $('customerSearch').addEventListener('input',()=>{state.customerVersion++;state.customer=null;$('salesOrder').disabled=true;$('salesOrder').replaceChildren(new Option('Select a customer first',''));$('gstNumber').value='';$('shippingGst').value='';$('placeOfSupply').value='';['mobile','whatsapp','shippingPhone'].forEach(k=>$(`cf_${k}`).value='');$('customerHint').textContent='Choose a matching ERP customer';addresses();});
-function normalizeTax(t){return {id:String(t.tax_id || t.tax_group_id || t.id || ''),name:t.tax_name || t.tax_group_name || t.name || t.tax_name_formatted || t.text,percentage:Number(t.tax_percentage ?? t.tax_group_percentage ?? t.percentage ?? 0)};}
-function itemTax(item) {
-  const preferences = item.item_tax_preferences || [];
-  const preferred = preferences.find(t => String(t.tax_specification || '').toLowerCase() === 'intra')
-    || preferences.find(t => String(t.tax_specific_type || '').toLowerCase() === 'tax')
-    || preferences[0]
-    || item;
-  const id = preferred.tax_id || preferred.tax_group_id || item.tax_id;
-  if (!id) return null;
-  const existing = state.taxes.find(t => String(t.id) === String(id));
-  if (existing) return existing;
-  const tax = normalizeTax({...preferred, tax_id: id});
-  if (tax.id && tax.name && Number.isFinite(tax.percentage)) {
-    state.taxes.push(tax);
-    return tax;
-  }
-  return null;
+function taxSpecification() {
+  const selected = $('location').value;
+  const location = selected ? state.locations.find(l => String(l.location_id) === selected)
+    : state.locations.find(l => l.is_primary);
+  const org = api.organization || {};
+  const code = record => record?.address?.state_code || record?.state_code;
+  const seller = selected ? code(location) : code(location) || code(org) || config.sellerStateCode;
+  return transactionTaxSpecification(seller, $('placeOfSupply').value);
 }
+function itemTax(item) {
+  const tax = selectTransactionTax(item, state.taxes, taxSpecification());
+  if (tax && !state.taxes.some(t => t.id === tax.id)) state.taxes.push(tax);
+  return tax;
+}
+function updateTransactionTaxes() {
+  approvedPayload = null;
+  for (const line of state.lines) {
+    if (line.loading || line.notFound) continue;
+    line.tax = itemTax(line.taxSource || {});
+  }
+  renderLines();
+}
+$('placeOfSupply').addEventListener('input', updateTransactionTaxes);
+$('location').addEventListener('change', updateTransactionTaxes);
 function debugSnapshot(selectedRecord, itemResponse, masterId, masterResponse, mergedItem, masterError) {
   const clean = value => JSON.parse(JSON.stringify(value, (key, data) => key === '__rajadhaniDebug' ? undefined : data));
   return {
@@ -292,7 +299,7 @@ async function fullItem(record) {
 async function lineFromItem(item, extra={}) {
   const tax = itemTax(item);
   const packing = itemPacking(item, config.itemFields);
-  return {item_id:String(item.item_id),name:item.name,sku:item.sku,hsn_or_sac:item.hsn_or_sac,stock:item.available_stock ?? item.stock_on_hand,unit:item.unit,rate:Number(item.rate||0),quantity:1,tax,tax_exemption_id:item.tax_exemption_id,...packing,itemDebug:item.__rajadhaniDebug,tracked:!!(item.is_serial_number_tracking_enabled||item.is_batch_tracking_enabled||item.is_storage_location_enabled),...extra};
+  return {item_id:String(item.item_id),name:item.name,sku:item.sku,hsn_or_sac:item.hsn_or_sac,stock:item.available_stock ?? item.stock_on_hand,unit:item.unit,rate:Number(item.rate||0),quantity:1,tax,taxSource:item,tax_exemption_id:item.tax_exemption_id,...packing,itemDebug:item.__rajadhaniDebug,tracked:!!(item.is_serial_number_tracking_enabled||item.is_batch_tracking_enabled||item.is_storage_location_enabled),...extra};
 }
 function quickLineFromRecord(record) {
   return {item_id:String(record.item_id),name:record.name || record.item_name || record.sku || 'Scanned item',sku:record.sku || record.item_code,hsn_or_sac:record.hsn_or_sac,stock:record.available_stock ?? record.stock_on_hand,unit:record.unit,rate:Number(record.rate||0),quantity:1,tax:null,tax_exemption_id:record.tax_exemption_id,mu:record.unit || '',pieces:null,loading:true};
@@ -349,10 +356,11 @@ async function loadLookups() {
     {name:'items',run:()=>api.searchItems('',1)},
     {name:'taxes',run:async()=>{state.taxes=(await api.all('/settings/taxes','taxes')).filter(t=>t.is_active!==false).map(normalizeTax);renderLines();}},
     {name:'salespersons',run:async()=>{const source=config.lookupSources.salesperson;if(source)selectOptions('salesperson',await api.all(source.path,source.key,source.query),source.idKey,source.labelKey,'Select salesperson');else selectOptions('salesperson',await api.salespersons(),'salesperson_id','salesperson_name','Select salesperson');}},
-    {name:'locations',run:async()=>{selectOptions('location',await api.all('/locations','locations'),'location_id','location_name','Organization default');}},
+    {name:'locations',run:async()=>{state.locations=await api.all('/locations','locations');selectOptions('location',state.locations,'location_id','location_name','Organization default');}},
     ...Object.entries(config.lookupSources).filter(([key])=>key!=='salesperson'&&key!=='billType').map(([key,source])=>({name:config.customFields[key]?.label||key,run:async()=>{if(!$(`cf_${key}`))return;selectOptions(`cf_${key}`,await api.all(source.path,source.key,source.query),source.idKey,source.labelKey,`Select ${config.customFields[key].label.toLowerCase()}`);}}))
   ];
   const results=await Promise.allSettled(jobs.map(j=>j.run()));const failures=results.flatMap((r,i)=>r.status==='rejected'?[`${jobs[i].name}: ${r.reason.message}`]:[]);
+  updateTransactionTaxes();
   if(failures.length)notice(`Some ERP lists could not load. ${failures.join(' • ')}`,'error');
   else notice('');
   return failures;
@@ -373,7 +381,10 @@ $('resetButton').onclick=()=>$('resetDialog').showModal();$('confirmReset').oncl
 $('salesOrderForm').addEventListener('submit',e=>{
   e.preventDefault();if(state.saved||state.busy||state.uncertain)return;
   if(state.pendingOperations){notice('Wait for ERP records to finish loading before reviewing.');return;}
-  const v=getValues(),errors=validateSalesOrder(state,v,config);if(errors.length){notice(errors.join(' '),'error');return;}
+  const v=getValues(),errors=validateSalesOrder(state,v,config);
+  const specification=taxSpecification();
+  if(!specification)errors.push('Set a valid seller state and place of supply to select GST.');
+  if(state.lines.some(l=>!l.notFound && (l.tax ? l.tax.specification!==specification : !l.tax_exemption_id)))errors.push(specification==='inter'?'An ERP IGST tax is required for every taxable interstate item. Configure the item’s interstate tax in ERP.':'Select the matching ERP intrastate tax for every taxable item.');if(errors.length){notice(errors.join(' '),'error');return;}
   approvedPayload=makePayload(state,v,config);const t=calculate(state.lines,v.discount,v.discountType,v.rounded);
   $('reviewContent').innerHTML=`<div class="summaryrow"><span>Customer</span><strong>${esc(state.customer.contact_name)}</strong></div><div class="summaryrow"><span>Sales order date</span><strong>${esc(v.date)}</strong></div>${state.lines.map(l=>`<div class="summaryrow"><span>${esc(l.name)} · ${l.quantity} × ${l.pieces ?? "?"} = ${l.pieces ? pieceQuantity(l) : "?"} pieces</span><strong>${esc(money(pieceQuantity(l)*l.rate))}</strong></div>`).join('')}<div class="grandtotal"><span>Estimated sales order total</span><strong>${esc(money(t.total))}</strong></div><p>This creates a draft sales order. It does not email the customer. ERP will calculate the final total.</p>`;
   $('saveStatus').textContent='';$('confirmSave').disabled=!!window.RAJADHANI_PREVIEW_CONFIG;if(window.RAJADHANI_PREVIEW_CONFIG)$('saveStatus').textContent='Preview only. No records will be created.';$('reviewDialog').showModal();

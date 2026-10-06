@@ -110,3 +110,21 @@ test('new orders never carry invoice conversion links or a supplied order number
  assert.equal(payload.line_items[0].salesorder_item_id,undefined);
  assert.equal(payload.salesorder_number,undefined);
 });
+
+test('interstate tax uses ERP IGST ID and intrastate uses GST ID',()=>{
+ const item={item_tax_preferences:[{tax_id:'local12',tax_name:'GST 12',tax_percentage:12,tax_specification:'intra'},{tax_id:'inter12',tax_name:'IGST 12',tax_percentage:12,tax_specification:'inter'}]};
+ assert.equal(core.selectTransactionTax(item,[],'inter').id,'inter12');
+ assert.equal(core.selectTransactionTax(item,[],'intra').id,'local12');
+ assert.equal(core.transactionTaxSpecification('KL','TN'),'inter');
+ assert.equal(core.transactionTaxSpecification('KA','KA'),'intra');
+ assert.equal(core.transactionTaxSpecification('','TN'),'');
+ const tax=core.selectTransactionTax(item,[],'inter');
+ assert.equal(makePayload({...state,lines:[{...lines[0],tax}]},{...values,place_of_supply:'TN'},config).line_items[0].tax_id,'inter12');
+});
+test('missing interstate tax never falls back to intrastate; only unique matching IGST is allowed',()=>{
+ const item={item_tax_preferences:[{tax_id:'local12',tax_name:'GST 12',tax_percentage:12,tax_specification:'intra'}]};
+ assert.equal(core.selectTransactionTax(item,[],'inter'),null);
+ const igst=core.normalizeTax({tax_id:'inter12',tax_name:'Integrated tax',tax_specific_type:'igst',tax_percentage:12});
+ assert.equal(core.selectTransactionTax(item,[igst],'inter').id,'inter12');
+ assert.equal(core.selectTransactionTax(item,[igst,{...igst,id:'duplicate'}],'inter'),null);
+});

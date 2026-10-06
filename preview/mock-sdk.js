@@ -30,7 +30,7 @@ const salesOrders=[
  {salesorder_id:'so3',salesorder_number:'SO-00133',status:'partially_invoiced',customer_id:'c3',customer_name:'Coastal Distributors',date:'2026-09-19',salesperson_id:'s1',line_items:[{...items[0],line_item_id:'sol5',quantity:15,quantity_invoiced:5}]}
 ];
 window.ZFAPPS = {
- extension:{init:async()=>({})},invoke:async()=>({}),get:async key=>key==='organization'?{organization:{organization_id:'preview-org',name:'Rajadhani · UI preview',currency_code:'INR'}}:{user:{name:'Anjali K'}},
+ extension:{init:async()=>({})},invoke:async()=>({}),get:async key=>key==='organization'?{organization:{organization_id:'preview-org',name:'Rajadhani · UI preview',currency_code:'INR',state_code:'KL'}}:{user:{name:'Anjali K'}},
  request:async options=>{
   await new Promise(resolve=>setTimeout(resolve,150));
   const path=new URL(options.url).pathname.replace('/erp/v3',''),q=Object.fromEntries((options.url_query||[]).map(v=>[v.key,v.value]));let response={};
@@ -42,7 +42,7 @@ window.ZFAPPS = {
   else if(path.startsWith('/itemmasters/'))response={item_master:itemMasters.find(i=>i.item_master_id===path.split('/').pop())};
   else if(path==='/settings/taxes')response={taxes};
   else if(path==='/salespersons')response={salespersons:[{salesperson_id:'s1',salesperson_name:'Arun Kumar'},{salesperson_id:'s2',salesperson_name:'Meera Nair'}]};
-  else if(path==='/locations')response={locations:[{location_id:'loc1',location_name:'Main warehouse · Kochi'},{location_id:'loc2',location_name:'Thrissur branch'}]};
+  else if(path==='/locations')response={locations:[{location_id:'loc1',location_name:'Main warehouse · Kochi',is_primary:true,address:{state_code:'KL'}},{location_id:'loc2',location_name:'Thrissur branch',address:{state_code:'KL'}}]};
   else if(path==='/salesorders')response={salesorders:salesOrders.filter(o=>!q.customer_id || String(o.customer_id)===String(q.customer_id)).map(({line_items,...o})=>o)};
   else if(path.startsWith('/salesorders/'))response={salesorder:salesOrders.find(o=>o.salesorder_id===path.split('/').pop())};
   else if(path.startsWith('/preview/'))response={records:lookups[path.split('/').pop()]||[]};

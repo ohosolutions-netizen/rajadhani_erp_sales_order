@@ -34,3 +34,9 @@ Live tenant saving cannot be verified by local mock tests. The separate invoice-
 - [Creation sidebar](https://www.zoho.com/finance/developer/widget-sdk-documentation/erp/v1/locations/creation-sidebar/)
 - [List sidebar](https://www.zoho.com/finance/developer/widget-sdk-documentation/erp/v1/locations/list-sidebar/)
 - [Sales Order REST API](https://www.zoho.com/erp/api/v3/sales-order/)
+
+## Interstate GST
+
+Tax selection compares place of supply against the selected business location's `address.state_code`, or the primary location/organization state when no location is selected. `sellerStateCode: "KL"` preserves this installation's original Kerala default only when the organization/primary location does not expose a state; set it to the actual seller state if different. An explicitly selected location with no state blocks saving until its state is available.
+
+Interstate orders use the item's ERP `inter`/IGST preference and send its actual tax ID. Intrastate orders use the `intra` preference. Existing lines are recalculated when the customer, place of supply or location changes. If an item lacks the appropriate preference, only a unique same-rate tax of the correct jurisdiction may be used; otherwise saving is blocked until the tax is configured/selected. The dropdown excludes taxes of the opposite jurisdiction. No tax IDs are fabricated.
