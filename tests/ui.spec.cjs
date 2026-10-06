@@ -14,19 +14,21 @@ for (const interstate of [false,true]) test(`production SDK saves ${interstate ?
  const mock=fs.readFileSync('preview/mock-sdk.js','utf8');
  await page.route('**/zf_sdk.js',r=>r.fulfill({contentType:'text/javascript',body:mock+`;window.testConfig=window.RAJADHANI_PREVIEW_CONFIG;delete window.RAJADHANI_PREVIEW_CONFIG;const originalRequest=window.ZFAPPS.request;window.sent=[];window.ZFAPPS.request=async o=>{if(o.method==='POST'){window.sent.push(o);return {data:{body:JSON.stringify({code:0,salesorder:{salesorder_id:'created1',salesorder_number:'SO-TEST',status:'draft',total:319.2}})}};}return originalRequest(o);};`}));
  await page.route('**/app/config.json',r=>{const c=JSON.parse(fs.readFileSync('app/config.json'));c.connectionLinkName='test';c.salesOrderQuantityMode='pieces';for(const [k,v]of Object.entries(c.customFields)){v.id='test-'+k;v.required=false;}c.requireSalesperson=false;r.fulfill({json:c});});
- await page.goto('/app/widget.html');await expect(page.locator('#connectionStatus')).toHaveText('ERP connected');await customer(page);await item(page,'Premium');if(interstate){await page.locator('#placeOfSupply').fill('TN');await expect(page.getByRole('combobox',{name:'Tax for Premium A4 Copier Paper'})).toHaveValue('it12');await expect(page.locator('#taxBreakdown')).toContainText('IGST');}await page.locator('#saveButton').click();await page.locator('#confirmSave').click();await expect(page.locator('#notice')).toContainText('SO-TEST saved');await expect(page.locator('#saveButton')).toBeDisabled();const sent=await page.evaluate(()=>window.sent);expect(sent.length).toBe(1);expect(sent[0].connection_link_name).toBe('test');expect(sent[0].url).toBe('https://www.zohoapis.in/erp/v3/salesorders');expect(sent[0].method).toBe('POST');expect(JSON.parse(sent[0].body.raw).line_items[0]).not.toHaveProperty('salesorder_item_id');expect(JSON.parse(sent[0].body.raw).line_items[0].item_id).toBe('i1');expect(JSON.parse(sent[0].body.raw).line_items[0].tax_id).toBe(interstate?'it12':'t12');expect(JSON.parse(sent[0].body.raw).place_of_supply).toBe(interstate?'TN':'KL');await expect(page).toHaveURL('https://erp.zoho.in/app/preview-org#/salesorders/created1?filter_by=Status.All&per_page=25&sort_column=created_time&sort_order=D');
+ await page.goto('/app/widget.html');await expect(page.locator('#connectionStatus')).toHaveText('ERP connected');await customer(page);await item(page,'Premium');if(interstate){await page.locator('#placeOfSupply').fill('TN');await expect(page.getByRole('textbox',{name:'Tax for Premium A4 Copier Paper'})).toHaveValue('IGST (12%)');await expect(page.locator('#taxBreakdown')).toContainText('IGST');}await page.locator('#saveButton').click();await page.locator('#confirmSave').click();await expect(page.locator('#notice')).toContainText('SO-TEST saved');await expect(page.locator('#saveButton')).toBeDisabled();const sent=await page.evaluate(()=>window.sent);expect(sent.length).toBe(1);expect(sent[0].connection_link_name).toBe('test');expect(sent[0].url).toBe('https://www.zohoapis.in/erp/v3/salesorders');expect(sent[0].method).toBe('POST');expect(JSON.parse(sent[0].body.raw).line_items[0]).not.toHaveProperty('salesorder_item_id');expect(JSON.parse(sent[0].body.raw).line_items[0].item_id).toBe('i1');expect(JSON.parse(sent[0].body.raw).line_items[0].tax_id).toBe(interstate?'it12':'t12');expect(JSON.parse(sent[0].body.raw).place_of_supply).toBe(interstate?'TN':'KL');await expect(page).toHaveURL('https://erp.zoho.in/app/preview-org#/salesorders/created1?filter_by=Status.All&per_page=25&sort_column=created_time&sort_order=D');
 });
 
 test('changing supply state updates existing items and newly added items, then restores local tax',async({page})=>{
  await start(page);await customer(page);await item(page,'Premium');
+ await expect(page.getByRole('textbox',{name:'Tax for Premium A4 Copier Paper'})).not.toBeEditable();
  await page.locator('#placeOfSupply').fill('TN');
- await expect(page.getByRole('combobox',{name:'Tax for Premium A4 Copier Paper'})).toHaveValue('it12');
+ await expect(page.getByRole('textbox',{name:'Tax for Premium A4 Copier Paper'})).toHaveValue('IGST (12%)');
  await item(page,'Ballpoint');
- await expect(page.getByRole('combobox',{name:'Tax for Ballpoint Pen · Blue'})).toHaveValue('it18');
+ await expect(page.getByRole('textbox',{name:'Tax for Ballpoint Pen · Blue'})).toHaveValue('IGST (18%)');
+ await expect(page.getByRole('textbox',{name:'Tax for Ballpoint Pen · Blue'})).not.toBeEditable();
  await expect(page.locator('#taxBreakdown')).toContainText('IGST');
  await expect(page.locator('#taxBreakdown')).not.toContainText('CGST');
  await page.locator('#placeOfSupply').fill('KL');
- await expect(page.getByRole('combobox',{name:'Tax for Premium A4 Copier Paper'})).toHaveValue('t12');
- await expect(page.getByRole('combobox',{name:'Tax for Ballpoint Pen · Blue'})).toHaveValue('t18');
+ await expect(page.getByRole('textbox',{name:'Tax for Premium A4 Copier Paper'})).toHaveValue('GST (12%)');
+ await expect(page.getByRole('textbox',{name:'Tax for Ballpoint Pen · Blue'})).toHaveValue('GST (18%)');
  await expect(page.locator('#taxBreakdown')).toContainText('CGST');
 });
