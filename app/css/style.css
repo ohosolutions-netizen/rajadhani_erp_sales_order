@@ -114,3 +114,8 @@ dialog{border-radius:7px}
   th:nth-child(8),td:nth-child(8){width:10%}
   th:nth-child(9),td:nth-child(9){width:9%}
 }
+
+/* Equal-width customer and transaction fields. */
+.customergrid,.transactionfields{grid-template-columns:repeat(3,minmax(0,1fr))}
+.customergrid .searchfield{grid-column:auto}
+@media(max-width:480px){.customergrid,.transactionfields{grid-template-columns:1fr}}

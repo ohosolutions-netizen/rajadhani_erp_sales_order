@@ -71,6 +71,7 @@ export function calculate(lines, discount = 0, type = 'percent', rounded = false
 export function validateSalesOrder(state, values, config) {
   const errors = [];
   if (!state.customer) errors.push('Select a customer from the ERP search results.');
+  if (values.shipping_gst_no && !/^[A-Za-z0-9]{15}$/.test(values.shipping_gst_no)) errors.push('Shipping GSTIN must contain exactly 15 letters or digits, or be blank.');
   if (!values.date) errors.push('Choose a sales order date.');
   if (!/^[A-Z]{2}$/.test(values.place_of_supply)) errors.push('Enter a valid two-letter place-of-supply state code.');
   const orderLines = state.lines.filter(l => !l.notFound);

@@ -43,7 +43,7 @@ $('billingFields').innerHTML = ['billType','billCreatedBy','mobile','whatsapp','
 $('dispatchFields').innerHTML = ['transport','agent','vehicle'].map(fieldMarkup).join('');
 $('salesOrderDate').value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0,10);
 function getValues() {
-  return { date: $('salesOrderDate').value, place_of_supply: $('placeOfSupply').value.trim().toUpperCase(), salesperson_id: $('salesperson').value, location_id: $('location').value,
+  return { date: $('salesOrderDate').value, place_of_supply: $('placeOfSupply').value.trim().toUpperCase(), salesperson_id: $('salesperson').value,
     shipping_gst_no: $('shippingGst').value.trim(), shipping_address: $('shippingAddress').value.trim(), notes: $('notes').value.trim(), sameAsBilling: $('sameAsBilling').checked,
     discount: Number($('discount').value), discountType: $('discountType').value, rounded: true,
     custom: Object.fromEntries(Object.keys(config.customFields).map(k => [k, $(`cf_${k}`)?.value?.trim?.() ?? ''])) };
@@ -133,7 +133,7 @@ function focusSalesOrderItems(focusIndex = null) {
 }
 function renderLines(focusIndex = null, focusItems = false) {
   $('emptyItems').hidden = !!state.lines.length;
-  $('lineItems').innerHTML = state.lines.map((l,i) => l.notFound ? `<tr data-line="${i}" class="notfoundline"><td>${i+1}</td><td colspan="8"><strong>Item not found</strong><small>Scanned value: ${esc(l.scanText || l.sku || '')}. Check the barcode/item code in ERP.</small></td><td><button class="remove" type="button" data-remove="${i}" aria-label="Remove item not found warning">×</button></td></tr>` : `<tr data-line="${i}" class="${l.loading ? 'loadingline' : ''}"><td>${i+1}</td><td class="itemname"><strong>${esc(l.name)}</strong><small>${esc(l.sku || 'No SKU')} · HSN ${esc(l.hsn_or_sac || '—')}</small>${l.loading ? '<small class="loadingnote">Loading ERP item details…</small>' : ''}${l.packingError ? `<small class="packingerror">${esc(l.packingError)}</small>${l.itemDebug ? `<button class="debugcopy" type="button" data-debug="${i}">Copy item response</button>` : ''}` : ''}</td><td>${esc(l.stock ?? '—')}<small>${esc(l.mu || l.unit || 'units')}</small></td><td>${l.loading ? '…' : esc(l.pieces || '—')}</td><td><input type="number" min="0.001" step="any" value="${l.quantity}" data-row="${i}" data-field="quantity" aria-label="Quantity for ${esc(l.name)}" required></td><td data-piece="${i}">${l.loading ? '…' : l.pieces ? l.pieces*l.quantity : '—'}</td><td><input type="number" min="0" step="0.01" value="${l.rate}" data-row="${i}" data-field="rate" aria-label="Rate for ${esc(l.name)}" required></td><td><input type="text" readonly aria-label="Tax for ${esc(l.name)}" value="${esc(l.loading ? 'Loading…' : l.tax ? `${l.tax.specification === 'inter' ? 'IGST' : 'GST'} (${l.tax.percentage}%)` : l.tax_exemption_id ? 'ERP exempt' : 'Tax not configured')}"></td><td class="right" data-amount="${i}">${l.loading ? '…' : esc(money(pieceQuantity(l)*l.rate))}</td><td><button class="remove" type="button" data-remove="${i}" aria-label="Remove ${esc(l.name)}">×</button></td></tr>`).join('');
+  $('lineItems').innerHTML = state.lines.map((l,i) => l.notFound ? `<tr data-line="${i}" class="notfoundline"><td>${i+1}</td><td colspan="8"><strong>Item not found</strong><small>Scanned value: ${esc(l.scanText || l.sku || '')}. Check the barcode/item code in ERP.</small></td><td><button class="remove" type="button" data-remove="${i}" aria-label="Remove item not found warning">×</button></td></tr>` : `<tr data-line="${i}" class="${l.loading ? 'loadingline' : ''}"><td>${i+1}</td><td class="itemname"><strong>${esc(l.name)}</strong><small>${esc(l.sku || 'No SKU')} · HSN ${esc(l.hsn_or_sac || '—')}</small>${l.loading ? '<small class="loadingnote">Loading ERP item details…</small>' : ''}${l.packingError ? `<small class="packingerror">${esc(l.packingError)}</small>${l.itemDebug ? `<button class="debugcopy" type="button" data-debug="${i}">Copy item response</button>` : ''}` : ''}</td><td>${esc(l.stock ?? '—')}<small>${esc(l.mu || l.unit || 'units')}</small></td><td>${l.loading ? '…' : esc(l.pieces || '—')}</td><td><input type="number" min="0.001" step="any" value="${l.quantity}" data-row="${i}" data-field="quantity" aria-label="Quantity for ${esc(l.name)}" required></td><td data-piece="${i}">${l.loading ? '…' : l.pieces ? l.pieces*l.quantity : '—'}</td><td><input type="number" min="0" step="0.01" value="${l.rate}" data-row="${i}" data-field="rate" aria-label="Rate for ${esc(l.name)}" required></td><td><input type="text" disabled readonly aria-label="Tax for ${esc(l.name)}" value="${esc(l.loading ? 'Loading…' : l.tax ? `${l.tax.specification === 'inter' ? 'IGST' : 'GST'} (${l.tax.percentage}%)` : l.tax_exemption_id ? 'ERP exempt' : 'Tax not configured')}"></td><td class="right" data-amount="${i}">${l.loading ? '…' : esc(money(pieceQuantity(l)*l.rate))}</td><td><button class="remove" type="button" data-remove="${i}" aria-label="Remove ${esc(l.name)}">×</button></td></tr>`).join('');
   totals();
   if (!state.lines.length) loadPendingSO(null);
   if (focusIndex != null || focusItems) focusSalesOrderItems(focusIndex);
@@ -160,12 +160,13 @@ function address(a) { return a ? [a.attention,a.address,a.street2,[a.city,a.stat
 function addresses() {
   $('billingAddress').textContent=address(state.customer?.billing_address);
   $('shippingAddress').value=$('sameAsBilling').checked && state.customer ? address(state.customer.billing_address) : '';
+  if ($('sameAsBilling').checked) $('shippingGst').value=$('gstNumber').value;
 }
 $('sameAsBilling').addEventListener('change', addresses);
 function selectOptions(id, records, idKey, nameKey, placeholder) { const current=$(id).value;$(id).replaceChildren(new Option(placeholder,''),...records.filter(r=>r.status!=='inactive'&&r.is_active!==false).map(r=>new Option(r[nameKey] || r.name || String(r[idKey]),String(r[idKey]))));if(records.some(r=>String(r[idKey])===current))$(id).value=current; }
 async function chooseCustomer(record) {
   const version=++state.customerVersion;
-  state.customer=null; $('salesOrder').disabled=true;$('salesOrder').replaceChildren(new Option('Loading sales orders…',''));
+  state.customer=null;
   $('customerSearch').value=record.contact_name; $('customerHint').textContent='Loading customer details…';
   pending(1);
   try {
@@ -181,10 +182,8 @@ async function chooseCustomer(record) {
     $('cf_shippingPhone').value=c.shipping_address?.phone || '';
     for(const [k,m] of Object.entries(config.customFields)) { const source=(c.custom_fields||[]).find(f=>m.customerApiName && f.api_name===m.customerApiName); if(source && $(`cf_${k}`))$(`cf_${k}`).value=source.value ?? ''; }
     addresses();updateTransactionTaxes();
-    const orders=await api.all('/salesorders','salesorders',{customer_id:c.contact_id}); if(version!==state.customerVersion)return;
-    selectOptions('salesOrder',orders.filter(o=>['open','confirmed','partially_invoiced'].includes(o.status)),'salesorder_id','salesorder_number','No sales order');$('salesOrder').disabled=false;
     requestAnimationFrame(() => $('itemSearch').focus());
-  }catch(e){if(version===state.customerVersion){error(e);$('customerHint').textContent=state.customer?'Customer loaded; sales order lookup failed.':'Could not load customer. Search again.';$('salesOrder').replaceChildren(new Option('Sales orders unavailable',''));}}finally{pending(-1);}
+  }catch(e){if(version===state.customerVersion){error(e);$('customerHint').textContent='Could not load customer. Search again.';}}finally{pending(-1);}
 }
 const normalized = value => String(value || '').trim().toLocaleLowerCase();
 const scannerMatch = (records, text) => {
@@ -217,14 +216,12 @@ function searchable(inputId, resultsId, search, key, describe, choose, options =
   return run;
 }
 searchable('customerSearch','customerResults',(q,p)=>api.searchCustomers(q,p),'contacts',c=>[c.contact_name,[c.company_name,c.mobile || c.email].filter(Boolean).join(' · ')],chooseCustomer);
-$('customerSearch').addEventListener('input',()=>{state.customerVersion++;state.customer=null;$('salesOrder').disabled=true;$('salesOrder').replaceChildren(new Option('Select a customer first',''));$('gstNumber').value='';$('shippingGst').value='';$('placeOfSupply').value='';['mobile','whatsapp','shippingPhone'].forEach(k=>$(`cf_${k}`).value='');$('customerHint').textContent='Choose a matching ERP customer';addresses();});
+$('customerSearch').addEventListener('input',()=>{state.customerVersion++;state.customer=null;$('gstNumber').value='';$('shippingGst').value='';$('placeOfSupply').value='';['mobile','whatsapp','shippingPhone'].forEach(k=>$(`cf_${k}`).value='');$('customerHint').textContent='Choose a matching ERP customer';addresses();});
 function taxSpecification() {
-  const selected = $('location').value;
-  const location = selected ? state.locations.find(l => String(l.location_id) === selected)
-    : state.locations.find(l => l.is_primary);
+  const location = state.locations.find(l => l.is_primary);
   const org = api.organization || {};
   const code = record => record?.address?.state_code || record?.state_code;
-  const seller = selected ? code(location) : code(location) || code(org) || config.sellerStateCode;
+  const seller = code(location) || code(org) || config.sellerStateCode;
   return transactionTaxSpecification(seller, $('placeOfSupply').value);
 }
 function itemTax(item) {
@@ -241,7 +238,6 @@ function updateTransactionTaxes() {
   renderLines();
 }
 $('placeOfSupply').addEventListener('input', updateTransactionTaxes);
-$('location').addEventListener('change', updateTransactionTaxes);
 function debugSnapshot(selectedRecord, itemResponse, masterId, masterResponse, mergedItem, masterError) {
   const clean = value => JSON.parse(JSON.stringify(value, (key, data) => key === '__rajadhaniDebug' ? undefined : data));
   return {
@@ -328,24 +324,13 @@ async function scanItemText(text) {
   finally{pending(-1);}
 }
 const browse=searchable('itemSearch','itemResults',(q,p)=>api.searchItems(q,p),'items',i=>[i.name,`${i.sku || 'No SKU'} · ${money(Number(i.rate||0))} · Stock ${i.available_stock ?? i.stock_on_hand ?? '—'}`],addItem,{scanOnEnter:true,scanImmediate:async text=>{try{await scanItemText(text);}catch(e){error(e);}}});
-$('browseItems').onclick=()=>{$('itemSearch').focus();if($('itemSearch').value.trim())browse();};
-$('salesOrder').addEventListener('change',async()=>{
-  if(!$('salesOrder').value)return;
-  if(!window.RAJADHANI_PREVIEW_CONFIG){notice('Sales-order import needs confirmation of whether ERP order quantities represent sets or pieces. Add items directly for now.');$('salesOrder').value='';return;}
-  if(state.lines.length){notice('Remove the current sales order items before importing a sales order.');$('salesOrder').value='';return;}
-  const version=state.customerVersion;pending(1);$('salesOrder').disabled=true;
-  try{const order=await api.salesOrder($('salesOrder').value);if(version!==state.customerVersion)return;if(String(order.customer_id)!==String(state.customer?.contact_id))throw new Error('Sales order belongs to a different customer.');
-    const lines=[];for(const l of order.line_items||[]){const remaining=Number(l.quantity)-Number(l.quantity_invoiced||0);if(remaining<=0)continue;const item=await fullItem(l);lines.push(await lineFromItem({...item,...l,custom_fields:item.custom_fields,custom_field_hash:item.custom_field_hash},{quantity:remaining,salesorder_item_id:l.line_item_id}));}
-    if(version!==state.customerVersion)return;state.lines=lines;if(order.salesperson_id)$('salesperson').value=String(order.salesperson_id);renderLines(null,true);if(state.lines[0])loadPendingSO(state.lines[0]);notice('Unbilled sales order items imported. Review quantities, rates and taxes.');
-  }catch(e){error(e);}finally{pending(-1);if(version===state.customerVersion)$('salesOrder').disabled=false;}
-});
 async function loadLookups() {
   const jobs=[
     {name:'customers',run:()=>api.searchCustomers('',1)},
     {name:'items',run:()=>api.searchItems('',1)},
     {name:'taxes',run:async()=>{state.taxes=(await api.all('/settings/taxes','taxes')).filter(t=>t.is_active!==false).map(normalizeTax);renderLines();}},
     {name:'salespersons',run:async()=>{const source=config.lookupSources.salesperson;if(source)selectOptions('salesperson',await api.all(source.path,source.key,source.query),source.idKey,source.labelKey,'Select salesperson');else selectOptions('salesperson',await api.salespersons(),'salesperson_id','salesperson_name','Select salesperson');}},
-    {name:'locations',run:async()=>{state.locations=await api.all('/locations','locations');selectOptions('location',state.locations,'location_id','location_name','Organization default');}},
+    {name:'locations',run:async()=>{state.locations=await api.all('/locations','locations');}},
     ...Object.entries(config.lookupSources).filter(([key])=>key!=='salesperson'&&key!=='billType').map(([key,source])=>({name:config.customFields[key]?.label||key,run:async()=>{if(!$(`cf_${key}`))return;selectOptions(`cf_${key}`,await api.all(source.path,source.key,source.query),source.idKey,source.labelKey,`Select ${config.customFields[key].label.toLowerCase()}`);}}))
   ];
   const results=await Promise.allSettled(jobs.map(j=>j.run()));const failures=results.flatMap((r,i)=>r.status==='rejected'?[`${jobs[i].name}: ${r.reason.message}`]:[]);

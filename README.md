@@ -13,7 +13,7 @@ Zoho ERP Sales Order creation widget adapted from the working Rajadhani invoice 
 
 Saving calls `POST /erp/v3/salesorders`, reads the `salesorder` response, locks the form after success and redirects the current browser tab to the new Sales Order detail page using the organization ID and returned `salesorder_id`. It does not call invoice creation, confirmation or email endpoints. Ambiguous save failures retain the original duplicate-prevention behavior.
 
-The existing optional sales-order lookup remains in the same position, labelled **Copy from sales order**. Its original preview-only import restriction is retained because source order quantity semantics were not configured for live import. Pending-order information remains available. Source line IDs are never sent as invoice-conversion links when creating a new order.
+The second row contains Customer GSTIN, Place of Supply and Salesperson in equal-width columns. Business Location, Copy from Sales Order and Browse Items are removed; item search and barcode entry remain available. The organization default location is used. Same as billing copies both the billing address and Customer GSTIN into shipping fields. Shipping GSTIN is optional; a populated value must contain exactly 15 letters or digits.
 
 ## Files and checks
 
@@ -37,6 +37,6 @@ Live tenant saving cannot be verified by local mock tests. The separate invoice-
 
 ## Interstate GST
 
-Tax selection compares place of supply against the selected business location's `address.state_code`, or the primary location/organization state when no location is selected. `sellerStateCode: "KL"` preserves this installation's original Kerala default only when the organization/primary location does not expose a state; set it to the actual seller state if different. An explicitly selected location with no state blocks saving until its state is available.
+Tax selection compares place of supply against the primary location/organization state. `sellerStateCode: "KL"` preserves this installation's original Kerala default only when the organization/primary location does not expose a state; set it to the actual seller state if different.
 
-Interstate orders use the item's ERP `inter`/IGST preference and send its actual tax ID. Intrastate orders use the `intra` preference. Existing lines are recalculated when the customer, place of supply or location changes. If an item lacks the appropriate preference, only a unique same-rate tax of the correct jurisdiction may be used; otherwise saving is blocked until the tax is configured in ERP. Item tax is read-only: each row displays IGST and its rate for interstate orders, or GST and its rate for intrastate orders. Operators cannot override tax on a line. No tax IDs are fabricated.
+Interstate orders use the item's ERP `inter`/IGST preference and send its actual tax ID. Intrastate orders use the `intra` preference. Existing lines are recalculated when the customer or place of supply changes. If an item lacks the appropriate preference, only a unique same-rate tax of the correct jurisdiction may be used; otherwise saving is blocked until the tax is configured in ERP. Item tax is disabled: each row displays IGST and its rate for interstate orders, or GST and its rate for intrastate orders. Operators cannot override tax on a line. No tax IDs are fabricated.

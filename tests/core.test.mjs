@@ -128,3 +128,8 @@ test('missing interstate tax never falls back to intrastate; only unique matchin
  assert.equal(core.selectTransactionTax(item,[igst],'inter').id,'inter12');
  assert.equal(core.selectTransactionTax(item,[igst,{...igst,id:'duplicate'}],'inter'),null);
 });
+
+test('shipping GSTIN accepts blank or 15 alphanumeric characters only',()=>{
+ for(const shipping_gst_no of ['',undefined,'32ABCDE1234F1Z5'])assert.ok(!validateSalesOrder(state,{...values,shipping_gst_no},config).some(e=>e.includes('Shipping GSTIN')));
+ for(const shipping_gst_no of ['32ABC','32ABCDE1234F1Z55','32ABCDE1234F1Z!'])assert.ok(validateSalesOrder(state,{...values,shipping_gst_no},config).some(e=>e.includes('Shipping GSTIN')));
+});
