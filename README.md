@@ -9,9 +9,9 @@ Zoho ERP Sales Order creation widget adapted from the working Rajadhani invoice 
 3. Run `npm ci` and `npm run build`.
 4. Upload `dist/RajadhaniSalesOrder.zip` in the Zoho ERP extension/widget configuration. It registers `salesorder.list.sidebar` and `salesorder.creation.sidebar` as modal widgets. The working `service: "ERP"`, SDK, API region and modal sizing are retained.
 5. Authorize the connection for the current user and open **Rajadhani Sales Order** from Sales Orders. Turn off Developer Mode when using an uploaded package.
-6. Verify one order in your organization: customer/items, custom fields, quantities, taxes, totals, automatic order number, permissions and return to the Sales Order list.
+6. Verify one order in your organization: customer/items, custom fields, quantities, taxes, totals, automatic order number, permissions and redirect to the created Sales Order detail page.
 
-Saving calls `POST /erp/v3/salesorders`, reads the `salesorder` response, locks the form after success and refreshes Sales Orders. It does not call invoice creation, confirmation or email endpoints. Ambiguous save failures retain the original duplicate-prevention behavior.
+Saving calls `POST /erp/v3/salesorders`, reads the `salesorder` response, locks the form after success and redirects the current browser tab to the new Sales Order detail page using the organization ID and returned `salesorder_id`. It does not call invoice creation, confirmation or email endpoints. Ambiguous save failures retain the original duplicate-prevention behavior.
 
 The existing optional sales-order lookup remains in the same position, labelled **Copy from sales order**. Its original preview-only import restriction is retained because source order quantity semantics were not configured for live import. Pending-order information remains available. Source line IDs are never sent as invoice-conversion links when creating a new order.
 
